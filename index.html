@@ -368,6 +368,9 @@
     </div>
     <div class="actions">
       <button class="btn solid sm" id="addBtn2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>New block</button>
+      <button class="btn sm" id="exportBtn" title="Download a backup of your plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export</button>
+      <button class="btn sm" id="importBtn" title="Load a backup file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 9l5-5 5 5M12 4v12"/></svg>Import</button>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none" />
       <button class="btn danger sm" id="resetBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Reset week</button>
     </div>
   </div>
@@ -534,11 +537,28 @@
     var lum=(0.299*r+0.587*g+0.114*b); return lum>140 ? '#0a0a0a' : '#f4f4f4';
   }
 
-  /* ---------- persistence ---------- */
+  /* ---------- persistence ----------
+     Priority: browser localStorage (permanent on a hosted site) →
+     window.storage (Claude artifact preview) → in-memory (last resort). */
   var mem=null;
+  function hasLocal(){ try { return (typeof window!=='undefined' && window.localStorage); } catch(e){ return false; } }
   function hasStore(){ return (typeof window!=='undefined' && window.storage && typeof window.storage.get==='function'); }
-  async function load(){ if(hasStore()){ try{var r=await window.storage.get(STORE_KEY); if(r&&r.value)return JSON.parse(r.value);}catch(e){} return null; } return mem; }
-  async function save(){ var p=JSON.stringify(state); if(hasStore()){ try{await window.storage.set(STORE_KEY,p);}catch(e){console.warn(e);} } else { mem=JSON.parse(p); } }
+
+  async function load(){
+    if (hasLocal()){
+      try { var v=window.localStorage.getItem(STORE_KEY); if(v) return JSON.parse(v); } catch(e){}
+      return null;
+    }
+    if (hasStore()){ try{var r=await window.storage.get(STORE_KEY); if(r&&r.value)return JSON.parse(r.value);}catch(e){} return null; }
+    return mem;
+  }
+  async function save(){
+    var p=JSON.stringify(state);
+    if (hasLocal()){ try{ window.localStorage.setItem(STORE_KEY,p); return; }catch(e){ console.warn('localStorage save failed',e); } }
+    if (hasStore()){ try{await window.storage.set(STORE_KEY,p); return;}catch(e){console.warn(e);} }
+    mem=JSON.parse(p);
+  }
+
 
   var $ = function(id){ return document.getElementById(id); };
   var calHead = $('calHead');
@@ -763,6 +783,36 @@
   function gotoThisWeek(){ state.weekStart=todayISO(mondayOf(new Date())); save(); render(); }
   function changeWeek(iso){ state.weekStart=todayISO(mondayOf(fromISO(iso))); save(); render(); }
 
+  /* ---------- export / import (backup) ---------- */
+  function exportData(){
+    try {
+      var data = JSON.stringify(state, null, 2);
+      var blob = new Blob([data], {type:'application/json'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      var stamp = todayISO(new Date());
+      a.href = url; a.download = 'weekly-planner-backup-'+stamp+'.json';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast('Backup downloaded');
+    } catch(e){ toast('Export failed'); }
+  }
+  function importData(file){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      try {
+        var obj = JSON.parse(e.target.result);
+        if (!obj || typeof obj!=='object' || !obj.events){ toast('That file isn\'t a planner backup'); return; }
+        if (!window.confirm('Import this backup?\n\nIt will replace your current plan with the contents of the file.')) return;
+        state = Object.assign({ weekStart:null, events:{}, streak:0, best:0, lastCheckin:null, xp:0, name:'' }, obj);
+        state.events = obj.events || {};
+        if (!state.weekStart) state.weekStart = todayISO(mondayOf(new Date()));
+        save(); render(); toast('Backup imported');
+      } catch(err){ toast('Couldn\'t read that file'); }
+    };
+    reader.readAsText(file);
+  }
+
   /* ---------- toast ---------- */
   var toastTimer=null;
   function toast(msg){ $('toastMsg').textContent=msg; var t=$('toast'); t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(function(){t.classList.remove('show');},2600); }
@@ -774,6 +824,9 @@
     $('addBtn2').addEventListener('click',newBlockNow);
     $('navAdd').addEventListener('click',newBlockNow);
     $('resetBtn').addEventListener('click',resetWeek);
+    $('exportBtn').addEventListener('click',exportData);
+    $('importBtn').addEventListener('click',function(){ $('importFile').click(); });
+    $('importFile').addEventListener('change',function(e){ if(e.target.files&&e.target.files[0]){ importData(e.target.files[0]); e.target.value=''; } });
     $('thisWeekBtn').addEventListener('click',gotoThisWeek);
     $('navWeek').addEventListener('click',gotoThisWeek);
     $('saveBtn').addEventListener('click',saveEvent);
