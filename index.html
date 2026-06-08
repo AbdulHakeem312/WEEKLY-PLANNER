@@ -245,9 +245,20 @@
   .ev {
     position: absolute; left: 3px; right: 3px; z-index: 2; box-sizing: border-box;
     font-family:'Geist Mono',monospace; font-size: 0.62rem; line-height: 1.28; padding: 5px 7px;
-    cursor: pointer; overflow: hidden; border-radius: 8px; border: 1px solid var(--line-2);
+    cursor: grab; overflow: hidden; border-radius: 8px; border: 1px solid var(--line-2);
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    transition: box-shadow 0.15s ease;
   }
-  .ev:hover { filter: brightness(1.15); z-index: 4; }
+  .ev:hover { filter: brightness(1.15); z-index: 20; }
+  .ev.nested { box-shadow: 0 0 0 1.5px var(--surface), 0 4px 14px rgba(0,0,0,0.35); }
+  .ev.dragging { cursor: grabbing; opacity: 0.92; z-index: 60 !important; box-shadow: 0 14px 34px rgba(0,0,0,0.55); filter: none; }
+  .ev.resizing { z-index: 60 !important; box-shadow: 0 14px 34px rgba(0,0,0,0.55); }
+  /* bottom grip to resize duration by dragging */
+  .ev-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 9px; cursor: ns-resize; touch-action: none; }
+  .ev-resize::after { content: ""; position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%); width: 22px; height: 3px; border-radius: 2px; background: currentColor; opacity: 0; transition: opacity 0.15s ease; }
+  .ev:hover .ev-resize::after { opacity: 0.45; }
+  /* live drop / resize preview */
+  .drop-preview { position: absolute; left: 3px; right: 3px; border: 2px dashed var(--accent); border-radius: 8px; background: rgba(255,255,255,0.05); z-index: 40; pointer-events: none; box-sizing: border-box; }
   .ev.done { background: transparent !important; color: var(--muted-2); border-style: dashed; }
   .ev.done .ev-title { text-decoration: line-through; }
   .ev .ev-title { font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -621,11 +632,11 @@
         var line=document.createElement('div'); line.className='now-line';
         line.style.top=(nf*ROW_H)+'px'; col.appendChild(line);
       }
-      // events for this day, laid out with overlap lanes
+      // events for this day — overlapping ones nest (small slots inside the big block)
       var dayEvents=eventsForDay(day);
-      var lanes=assignLanes(dayEvents);
+      var nest=computeNesting(dayEvents);
       dayEvents.forEach(function(ev){
-        col.appendChild(makeChip(ev, lanes.laneOf[ev.id], lanes.count));
+        col.appendChild(makeChip(ev, nest.depthOf[ev.id]||0));
       });
       calBody.appendChild(col);
     }
@@ -633,44 +644,127 @@
 
   function eventsForDay(day){
     var out=[]; for(var id in state.events){ var e=state.events[id]; if(e.day===day) out.push(e); }
-    out.sort(function(a,b){ return a.slot-b.slot || b.dur-a.dur; });
+    out.sort(function(a,b){ return a.slot-b.slot || b.dur-a.dur; }); // containers (bigger, earlier) first
     return out;
   }
-  // greedy lane assignment so overlapping events sit side-by-side
-  function assignLanes(events){
-    var laneEnds=[]; var laneOf={};
-    events.forEach(function(ev){
-      var start=ev.slot, end=ev.slot+ev.dur, placed=false;
-      for (var l=0; l<laneEnds.length; l++){
-        if (start >= laneEnds[l]){ laneEnds[l]=end; laneOf[ev.id]=l; placed=true; break; }
+  // nesting: a shorter event that overlaps a longer one slots INSIDE it (cascading inset),
+  // rather than both shrinking to share the width.
+  function computeNesting(events){
+    var depthOf={}, max=0;
+    for (var i=0;i<events.length;i++){
+      var e=events[i], d=0;
+      for (var j=0;j<i;j++){
+        var f=events[j];
+        // f started at/before e and is still running when e starts → e nests within f
+        if (f.slot <= e.slot && (f.slot+f.dur) > e.slot){ d=Math.max(d,(depthOf[f.id]||0)+1); }
       }
-      if (!placed){ laneOf[ev.id]=laneEnds.length; laneEnds.push(end); }
-    });
-    return { laneOf: laneOf, count: Math.max(1, laneEnds.length) };
+      depthOf[e.id]=d; if(d>max)max=d;
+    }
+    return { depthOf: depthOf, max: max };
   }
 
-  function makeChip(ev, lane, laneCount){
-    lane = lane||0; laneCount = laneCount||1;
-    var chip=document.createElement('div'); chip.className='ev'+(ev.done?' done':'');
+  function makeChip(ev, depth){
+    depth = depth||0;
+    var chip=document.createElement('div'); chip.className='ev'+(ev.done?' done':'')+(depth>0?' nested':'');
     if (!ev.done){ chip.style.background=ev.color||COLORS[2]; chip.style.color=contrastOn(ev.color||COLORS[2]); chip.style.borderColor='transparent'; }
-    // absolute placement: spans the full duration across the slot rows
-    var top = ev.slot*ROW_H + 2;
-    var height = ev.dur*ROW_H - 4;
-    chip.style.top = top+'px';
-    chip.style.height = height+'px';
-    // width split across lanes for overlaps
-    if (laneCount>1){
-      var gap=3, pct=100/laneCount;
-      chip.style.left='calc('+(pct*lane)+'% + '+(lane===0?3:gap)+'px)';
-      chip.style.width='calc('+pct+'% - '+(gap+2)+'px)';
-      chip.style.right='auto';
-    }
+    chip.style.top = (ev.slot*ROW_H + 2)+'px';
+    chip.style.height = (ev.dur*ROW_H - 4)+'px';
+    // nested cards cascade inward (kept wide — never split in half)
+    var capped = Math.min(depth, 4);
+    chip.style.left  = (3 + capped*16)+'px';
+    chip.style.right = (3 + capped*8)+'px';
+    chip.style.zIndex = 5 + depth*2;
     var locHtml = ev.loc ? ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'+escapeHtml(ev.loc)) : '';
     var durHtml='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'+durLabel(ev.dur);
-    chip.innerHTML='<div class="ev-check">'+(ev.done?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':'')+'</div><div class="ev-title">'+escapeHtml(ev.title||'(untitled)')+'</div><div class="ev-meta">'+durHtml+(locHtml?' · '+locHtml:'')+'</div>';
-    chip.addEventListener('click', function(e){ e.stopPropagation(); if(e.target.closest('.ev-check'))toggleDone(ev.id); else openModal(ev.day,ev.slot,ev); });
+    chip.innerHTML='<div class="ev-check">'+(ev.done?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':'')+'</div><div class="ev-title">'+escapeHtml(ev.title||'(untitled)')+'</div><div class="ev-meta">'+durHtml+(locHtml?' · '+locHtml:'')+'</div><div class="ev-resize" aria-hidden="true"></div>';
+    chip.addEventListener('pointerdown', function(e){ onChipPointerDown(e, ev, chip); });
     return chip;
   }
+
+  /* ---------- drag to move / resize ---------- */
+  var drag=null, dropPreview=null;
+  function ensurePreview(){ if(!dropPreview){ dropPreview=document.createElement('div'); dropPreview.className='drop-preview'; } return dropPreview; }
+  function showPreview(day, slot, dur){
+    var col=calBody.querySelector('.daycol[data-day="'+day+'"]'); if(!col) return;
+    var p=ensurePreview();
+    if (p.parentNode!==col) col.appendChild(p);
+    p.style.top=(slot*ROW_H+2)+'px'; p.style.height=(dur*ROW_H-4)+'px'; p.style.display='block';
+  }
+  function hidePreview(){ if(dropPreview&&dropPreview.parentNode) dropPreview.parentNode.removeChild(dropPreview); }
+  function colRects(){
+    return Array.prototype.map.call(calBody.querySelectorAll('.daycol'), function(c){
+      return { day:+c.dataset.day, rect:c.getBoundingClientRect() };
+    });
+  }
+  function onChipPointerDown(e, ev, chip){
+    if (e.button && e.button!==0) return;
+    var onCheck = !!e.target.closest('.ev-check');
+    var onResize = !!e.target.closest('.ev-resize');
+    e.preventDefault(); e.stopPropagation();
+    try { chip.setPointerCapture(e.pointerId); } catch(_){}
+    drag = {
+      mode: onCheck ? 'check' : (onResize ? 'resize' : 'move'),
+      ev: ev, chip: chip, id: e.pointerId,
+      startX: e.clientX, startY: e.clientY,
+      origDur: ev.dur, cols: colRects(), moved: false,
+      target: { day: ev.day, slot: ev.slot, dur: ev.dur }
+    };
+    chip.addEventListener('pointermove', onChipPointerMove);
+    chip.addEventListener('pointerup', onChipPointerUp);
+    chip.addEventListener('pointercancel', onChipPointerUp);
+  }
+  function onChipPointerMove(e){
+    if(!drag || e.pointerId!==drag.id) return;
+    var dx=e.clientX-drag.startX, dy=e.clientY-drag.startY;
+    if(!drag.moved){
+      if (Math.abs(dx)+Math.abs(dy) < 5) return;   // movement threshold → distinguishes from a tap
+      drag.moved=true;
+      if(drag.mode==='move') drag.chip.classList.add('dragging');
+      if(drag.mode==='resize') drag.chip.classList.add('resizing');
+    }
+    if(drag.mode==='check') return;
+
+    if(drag.mode==='move'){
+      drag.chip.style.transform='translate('+dx+'px,'+dy+'px)';
+      var slotDelta=Math.round(dy/ROW_H);
+      var newSlot=Math.max(0, Math.min(SLOTS-drag.ev.dur, drag.ev.slot+slotDelta));
+      var newDay=drag.ev.day, cols=drag.cols;
+      if (e.clientX < cols[0].rect.left) newDay=cols[0].day;
+      else if (e.clientX >= cols[cols.length-1].rect.right) newDay=cols[cols.length-1].day;
+      else { for(var i=0;i<cols.length;i++){ var r=cols[i].rect; if(e.clientX>=r.left && e.clientX<r.right){ newDay=cols[i].day; break; } } }
+      drag.target={day:newDay, slot:newSlot, dur:drag.ev.dur};
+      showPreview(newDay, newSlot, drag.ev.dur);
+    } else if(drag.mode==='resize'){
+      var newDur=Math.max(1, Math.min(SLOTS-drag.ev.slot, drag.origDur + Math.round(dy/ROW_H)));
+      drag.target={day:drag.ev.day, slot:drag.ev.slot, dur:newDur};
+      drag.chip.style.height=(newDur*ROW_H-4)+'px';
+      showPreview(drag.ev.day, drag.ev.slot, newDur);
+    }
+  }
+  function onChipPointerUp(e){
+    if(!drag || e.pointerId!==drag.id) return;
+    var d=drag; drag=null;
+    d.chip.removeEventListener('pointermove', onChipPointerMove);
+    d.chip.removeEventListener('pointerup', onChipPointerUp);
+    d.chip.removeEventListener('pointercancel', onChipPointerUp);
+    try { d.chip.releasePointerCapture(e.pointerId); } catch(_){}
+    d.chip.classList.remove('dragging','resizing');
+    d.chip.style.transform=''; hidePreview();
+
+    if(!d.moved){
+      // no drag → it was a tap: toggle done (on the box) or open editor
+      if(d.mode==='check') toggleDone(d.ev.id);
+      else openModal(d.ev.day, d.ev.slot, d.ev);
+      return;
+    }
+    if(d.mode==='check'){ return; } // ignore stray movement on the checkbox
+    var ev=state.events[d.ev.id]; if(!ev){ render(); return; }
+    var changed = (ev.day!==d.target.day || ev.slot!==d.target.slot || ev.dur!==d.target.dur);
+    ev.day=d.target.day; ev.slot=d.target.slot; ev.dur=d.target.dur;
+    if(changed){ save(); render(); toast(d.mode==='resize' ? ('Duration → '+durLabel(ev.dur)) : 'Block moved'); }
+    else render();
+  }
+
   function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   function eventsAt(day,slot){ var out=[]; for(var id in state.events){var e=state.events[id]; if(e.day===day&&e.slot===slot)out.push(e);} return out; }
   function countByDay(){ var c=[0,0,0,0,0,0,0]; for(var id in state.events){c[state.events[id].day]++;} return c; }
@@ -856,6 +950,7 @@
     function add(title,day,slot,dur,loc,color){ var id=uid(); state.events[id]={id:id,title:title,day:day,slot:slot,dur:dur,loc:loc||'',notes:'',color:color||COLORS[2],done:false}; }
     add('Morning workout', 0, 13, 2, 'Gym', '#454545');
     add('Deep work block', 0, 20, 12, 'Desk', '#2c2c2c');      /* Mon 10:00 AM → 4:00 PM (6h) */
+    add('Quick call', 0, 24, 1, 'Phone', '#9a9a9a');           /* Mon 12:00 PM — nests inside Deep work */
     add('Lunch with a friend', 2, 25, 2, 'Café', '#6a6a6a');
     add('Workshop day', 3, 18, 15, 'Studio', '#1c1c1c');       /* Thu 9:00 AM → 4:30 PM (7h 30m) */
     add('Grocery run', 4, 36, 2, 'Supermarket', '#9a9a9a');
