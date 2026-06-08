@@ -257,7 +257,12 @@
   .ev-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 9px; cursor: ns-resize; touch-action: none; }
   .ev-resize::after { content: ""; position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%); width: 22px; height: 3px; border-radius: 2px; background: currentColor; opacity: 0; transition: opacity 0.15s ease; }
   .ev:hover .ev-resize::after { opacity: 0.45; }
-  /* live drop / resize preview */
+  /* right grip to copy the block across days (sweep left/right) */
+  .ev-copy { position: absolute; top: 0; right: 0; bottom: 9px; width: 11px; cursor: copy; touch-action: none; }
+  .ev-copy::after { content: ""; position: absolute; right: 3px; top: 50%; transform: translateY(-50%); width: 3px; height: 20px; border-radius: 2px; background: currentColor; opacity: 0; transition: opacity 0.15s ease; }
+  .ev:hover .ev-copy::after { opacity: 0.45; }
+  .ev.copying { z-index: 60 !important; box-shadow: 0 14px 34px rgba(0,0,0,0.55); }
+  /* live drop / resize / copy preview */
   .drop-preview { position: absolute; left: 3px; right: 3px; border: 2px dashed var(--accent); border-radius: 8px; background: rgba(255,255,255,0.05); z-index: 40; pointer-events: none; box-sizing: border-box; }
   .ev.done { background: transparent !important; color: var(--muted-2); border-style: dashed; }
   .ev.done .ev-title { text-decoration: line-through; }
@@ -676,13 +681,13 @@
     chip.style.zIndex = 5 + depth*2;
     var locHtml = ev.loc ? ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'+escapeHtml(ev.loc)) : '';
     var durHtml='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'+durLabel(ev.dur);
-    chip.innerHTML='<div class="ev-check">'+(ev.done?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':'')+'</div><div class="ev-title">'+escapeHtml(ev.title||'(untitled)')+'</div><div class="ev-meta">'+durHtml+(locHtml?' · '+locHtml:'')+'</div><div class="ev-resize" aria-hidden="true"></div>';
+    chip.innerHTML='<div class="ev-check">'+(ev.done?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':'')+'</div><div class="ev-title">'+escapeHtml(ev.title||'(untitled)')+'</div><div class="ev-meta">'+durHtml+(locHtml?' · '+locHtml:'')+'</div><div class="ev-resize" aria-hidden="true"></div><div class="ev-copy" aria-hidden="true" title="Drag across days to copy"></div>';
     chip.addEventListener('pointerdown', function(e){ onChipPointerDown(e, ev, chip); });
     return chip;
   }
 
-  /* ---------- drag to move / resize ---------- */
-  var drag=null, dropPreview=null;
+  /* ---------- drag to move / resize / copy ---------- */
+  var drag=null, dropPreview=null, copyPreviews=[];
   function ensurePreview(){ if(!dropPreview){ dropPreview=document.createElement('div'); dropPreview.className='drop-preview'; } return dropPreview; }
   function showPreview(day, slot, dur){
     var col=calBody.querySelector('.daycol[data-day="'+day+'"]'); if(!col) return;
@@ -691,23 +696,40 @@
     p.style.top=(slot*ROW_H+2)+'px'; p.style.height=(dur*ROW_H-4)+'px'; p.style.display='block';
   }
   function hidePreview(){ if(dropPreview&&dropPreview.parentNode) dropPreview.parentNode.removeChild(dropPreview); }
+  function showCopyPreviews(days, slot, dur){
+    hideCopyPreviews();
+    days.forEach(function(day){
+      var col=calBody.querySelector('.daycol[data-day="'+day+'"]'); if(!col) return;
+      var p=document.createElement('div'); p.className='drop-preview';
+      p.style.top=(slot*ROW_H+2)+'px'; p.style.height=(dur*ROW_H-4)+'px';
+      col.appendChild(p); copyPreviews.push(p);
+    });
+  }
+  function hideCopyPreviews(){ copyPreviews.forEach(function(p){ if(p.parentNode)p.parentNode.removeChild(p); }); copyPreviews=[]; }
   function colRects(){
     return Array.prototype.map.call(calBody.querySelectorAll('.daycol'), function(c){
       return { day:+c.dataset.day, rect:c.getBoundingClientRect() };
     });
   }
+  function dayUnderX(x, cols){
+    if (x < cols[0].rect.left) return cols[0].day;
+    if (x >= cols[cols.length-1].rect.right) return cols[cols.length-1].day;
+    for(var i=0;i<cols.length;i++){ var r=cols[i].rect; if(x>=r.left && x<r.right) return cols[i].day; }
+    return cols[0].day;
+  }
   function onChipPointerDown(e, ev, chip){
     if (e.button && e.button!==0) return;
     var onCheck = !!e.target.closest('.ev-check');
+    var onCopy = !!e.target.closest('.ev-copy');
     var onResize = !!e.target.closest('.ev-resize');
     e.preventDefault(); e.stopPropagation();
     try { chip.setPointerCapture(e.pointerId); } catch(_){}
     drag = {
-      mode: onCheck ? 'check' : (onResize ? 'resize' : 'move'),
+      mode: onCheck ? 'check' : (onCopy ? 'copy' : (onResize ? 'resize' : 'move')),
       ev: ev, chip: chip, id: e.pointerId,
       startX: e.clientX, startY: e.clientY,
       origDur: ev.dur, cols: colRects(), moved: false,
-      target: { day: ev.day, slot: ev.slot, dur: ev.dur }
+      target: { day: ev.day, slot: ev.slot, dur: ev.dur, copyDays: [] }
     };
     chip.addEventListener('pointermove', onChipPointerMove);
     chip.addEventListener('pointerup', onChipPointerUp);
@@ -721,6 +743,7 @@
       drag.moved=true;
       if(drag.mode==='move') drag.chip.classList.add('dragging');
       if(drag.mode==='resize') drag.chip.classList.add('resizing');
+      if(drag.mode==='copy') drag.chip.classList.add('copying');
     }
     if(drag.mode==='check') return;
 
@@ -728,17 +751,21 @@
       drag.chip.style.transform='translate('+dx+'px,'+dy+'px)';
       var slotDelta=Math.round(dy/ROW_H);
       var newSlot=Math.max(0, Math.min(SLOTS-drag.ev.dur, drag.ev.slot+slotDelta));
-      var newDay=drag.ev.day, cols=drag.cols;
-      if (e.clientX < cols[0].rect.left) newDay=cols[0].day;
-      else if (e.clientX >= cols[cols.length-1].rect.right) newDay=cols[cols.length-1].day;
-      else { for(var i=0;i<cols.length;i++){ var r=cols[i].rect; if(e.clientX>=r.left && e.clientX<r.right){ newDay=cols[i].day; break; } } }
-      drag.target={day:newDay, slot:newSlot, dur:drag.ev.dur};
+      var newDay=dayUnderX(e.clientX, drag.cols);
+      drag.target={day:newDay, slot:newSlot, dur:drag.ev.dur, copyDays:[]};
       showPreview(newDay, newSlot, drag.ev.dur);
     } else if(drag.mode==='resize'){
       var newDur=Math.max(1, Math.min(SLOTS-drag.ev.slot, drag.origDur + Math.round(dy/ROW_H)));
-      drag.target={day:drag.ev.day, slot:drag.ev.slot, dur:newDur};
+      drag.target={day:drag.ev.day, slot:drag.ev.slot, dur:newDur, copyDays:[]};
       drag.chip.style.height=(newDur*ROW_H-4)+'px';
       showPreview(drag.ev.day, drag.ev.slot, newDur);
+    } else if(drag.mode==='copy'){
+      // sweep left/right across days → copy onto each day in range (except the source)
+      var curDay=dayUnderX(e.clientX, drag.cols);
+      var lo=Math.min(drag.ev.day, curDay), hi=Math.max(drag.ev.day, curDay);
+      var days=[]; for(var d=lo; d<=hi; d++){ if(d!==drag.ev.day) days.push(d); }
+      drag.target={day:drag.ev.day, slot:drag.ev.slot, dur:drag.ev.dur, copyDays:days};
+      showCopyPreviews(days, drag.ev.slot, drag.ev.dur);
     }
   }
   function onChipPointerUp(e){
@@ -748,8 +775,8 @@
     d.chip.removeEventListener('pointerup', onChipPointerUp);
     d.chip.removeEventListener('pointercancel', onChipPointerUp);
     try { d.chip.releasePointerCapture(e.pointerId); } catch(_){}
-    d.chip.classList.remove('dragging','resizing');
-    d.chip.style.transform=''; hidePreview();
+    d.chip.classList.remove('dragging','resizing','copying');
+    d.chip.style.transform=''; hidePreview(); hideCopyPreviews();
 
     if(!d.moved){
       // no drag → it was a tap: toggle done (on the box) or open editor
@@ -758,12 +785,35 @@
       return;
     }
     if(d.mode==='check'){ return; } // ignore stray movement on the checkbox
+
+    if(d.mode==='copy'){
+      var made=addCopies(d.ev, d.target.copyDays||[]);
+      if(made){ save(); render(); toast('Copied to '+made+' day'+(made===1?'':'s')); }
+      else { render(); toast('Nothing new to copy'); }
+      return;
+    }
+
     var ev=state.events[d.ev.id]; if(!ev){ render(); return; }
     var changed = (ev.day!==d.target.day || ev.slot!==d.target.slot || ev.dur!==d.target.dur);
     ev.day=d.target.day; ev.slot=d.target.slot; ev.dur=d.target.dur;
     if(changed){ save(); render(); toast(d.mode==='resize' ? ('Duration → '+durLabel(ev.dur)) : 'Block moved'); }
     else render();
   }
+  // create copies of an event on the given days (skips exact duplicates)
+  function addCopies(src, days){
+    var made=0;
+    days.forEach(function(day){
+      var dup=false;
+      for(var id in state.events){ var f=state.events[id]; if(f.day===day && f.slot===src.slot && f.dur===src.dur && f.title===src.title){ dup=true; break; } }
+      if(dup) return;
+      var nid=uid();
+      state.events[nid]={ id:nid, title:src.title, day:day, slot:src.slot, dur:src.dur, loc:src.loc||'', notes:src.notes||'', color:src.color||COLORS[2], done:false };
+      made++;
+    });
+    if(made) addXp(3*made, null);
+    return made;
+  }
+
 
   function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   function eventsAt(day,slot){ var out=[]; for(var id in state.events){var e=state.events[id]; if(e.day===day&&e.slot===slot)out.push(e);} return out; }
