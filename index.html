@@ -27,7 +27,7 @@
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { background: var(--bg); }
-  body { background: transparent; color: var(--fg); }
+  body { background: transparent; color: var(--fg); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   #app { position: relative; z-index: 0; }
 
   #app {
@@ -123,6 +123,7 @@
     display: flex; flex-direction: column; align-items: center;
   }
   h1.title {
+    font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
     font-weight: 700; font-size: clamp(2.4rem, 6.4vw, 4.4rem); line-height: 0.98;
     letter-spacing: -0.035em; color: var(--fg-dim); margin-top: 20px; max-width: 16ch;
   }
@@ -173,13 +174,13 @@
   /* ---------- section scaffolding ---------- */
   .section { max-width: 1500px; margin: 0 auto; padding: 0 28px; }
   .section-head { padding: 46px 0 22px; }
-  .section-head h2 { font-weight: 700; font-size: clamp(1.8rem, 3.6vw, 2.6rem); letter-spacing: -0.03em; color: var(--fg); margin-top: 14px; max-width: 18ch; }
+  .section-head h2 { font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: clamp(1.8rem, 3.6vw, 2.6rem); letter-spacing: -0.03em; color: var(--fg); margin-top: 14px; max-width: 18ch; }
   .section-head p { margin-top: 12px; color: var(--muted); font-size: 1rem; max-width: 52ch; line-height: 1.5; }
 
   /* ---------- stat cards (BY THE NUMBERS style) ---------- */
   .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
   .statcard { background: var(--surface); padding: 22px 22px 20px; position: relative; }
-  .statcard .num { font-weight: 700; font-size: 2.6rem; letter-spacing: -0.04em; color: var(--fg); line-height: 1; }
+  .statcard .num { font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: 2.6rem; letter-spacing: -0.04em; color: var(--fg); line-height: 1; }
   .statcard .lab { font-family:'Geist Mono',monospace; font-size: 0.56rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted-2); margin-top: 14px; }
   .statcard .sub { color: var(--muted); font-size: 0.84rem; margin-top: 7px; line-height: 1.45; }
 
@@ -309,7 +310,7 @@
   .modal { background: var(--surface); color: var(--fg); border: 1px solid var(--line-2); border-radius: var(--radius); width: 100%; max-width: 460px; animation: pop 0.2s cubic-bezier(.2,.8,.2,1); box-shadow: 0 30px 70px rgba(0,0,0,0.6); }
   @keyframes pop { from { transform: translateY(12px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
   .modal header { border-bottom: 1px solid var(--line); padding: 18px 20px; display: flex; justify-content: space-between; align-items: baseline; }
-  .modal header .mtitle { font-weight: 700; font-size: 1.3rem; letter-spacing: -0.02em; }
+  .modal header .mtitle { font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: 1.3rem; letter-spacing: -0.02em; }
   .modal header .mwhen { font-family:'Geist Mono',monospace; font-size: 0.62rem; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
   .modal .body { padding: 18px 20px 4px; }
   .modal .grp { margin-bottom: 15px; }
@@ -334,6 +335,82 @@
   .toast.show { transform: translateX(-50%) translateY(0); }
 
   /* footer */
+  /* ---------- notes dock (edge tab + slide-in panel) ---------- */
+  .notes-dock {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 95;
+    width: min(380px, 88vw);
+    transform: translateX(100%);
+    transition: transform 0.32s cubic-bezier(.2,.8,.2,1);
+  }
+  .notes-dock.open { transform: translateX(0); }
+  /* compact pull tab with a comfortable (but not full-height) hit area */
+  .notes-tab {
+    position: absolute; left: -40px; top: 50%; transform: translateY(-50%);
+    width: 40px; height: 168px; padding: 0; border: 1px solid var(--line-2); border-right: none;
+    background: var(--bg-2); color: var(--fg); cursor: pointer;
+    border-radius: 13px 0 0 13px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    transition: left 0.18s ease, background 0.18s ease, width 0.18s ease;
+    box-shadow: -6px 0 22px rgba(0,0,0,0.35);
+  }
+  .notes-tab:hover { left: -45px; width: 45px; background: var(--surface-2); }
+  .notes-dock.open .notes-tab { box-shadow: none; }
+  .notes-dock.open .notes-tab:hover { left: -40px; width: 40px; }
+  .notes-tab svg { width: 17px; height: 17px; color: var(--muted); }
+  .notes-tab .nt-label {
+    writing-mode: vertical-rl; text-orientation: mixed; transform: rotate(180deg);
+    font-family:'Geist Mono',monospace; font-size: 0.6rem; letter-spacing: 0.28em; color: var(--muted);
+  }
+  .notes-tab:hover svg, .notes-tab:hover .nt-label { color: var(--fg); }
+
+  .notes-panel {
+    height: 100%; background: var(--bg-2); border-left: 1px solid var(--line-2);
+    box-shadow: -24px 0 60px rgba(0,0,0,0.5);
+    display: flex; flex-direction: column; padding: 22px 20px 18px; gap: 18px; overflow: hidden;
+  }
+  .np-head { display: flex; align-items: flex-start; justify-content: space-between; }
+  .np-week { font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: 1.15rem; letter-spacing: -0.02em; color: var(--fg); margin-top: 8px; }
+  .iconbtn.ghostx { border-color: transparent; background: transparent; color: var(--muted); }
+  .iconbtn.ghostx:hover { background: var(--hover); color: var(--fg); }
+
+  .np-section { display: flex; flex-direction: column; gap: 10px; }
+  .np-label { font-size: 0.56rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted-2); }
+  .obj-add { display: flex; gap: 8px; }
+  .obj-add input {
+    flex: 1; font-family:'Geist',sans-serif; font-size: 0.9rem; border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm); background: var(--surface); padding: 9px 11px; color: var(--fg);
+  }
+  .obj-add input:focus { outline: none; border-color: var(--muted); }
+  .obj-add .btn.sm { padding: 8px 10px; }
+  .obj-list { display: flex; flex-direction: column; gap: 6px; max-height: 26vh; overflow-y: auto; }
+  .obj-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  .obj-item .obj-box {
+    width: 16px; height: 16px; flex: none; border: 1px solid var(--line-2); border-radius: 5px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; color: transparent; transition: background 0.12s ease;
+  }
+  .obj-item.done .obj-box { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .obj-item .obj-box svg { width: 11px; height: 11px; }
+  .obj-item .obj-text { flex: 1; font-size: 0.88rem; color: var(--fg); line-height: 1.35; word-break: break-word; }
+  .obj-item.done .obj-text { text-decoration: line-through; color: var(--muted-2); }
+  .obj-item .obj-del { border: none; background: transparent; color: var(--muted-2); cursor: pointer; padding: 3px; line-height: 0; border-radius: 5px; opacity: 0; transition: opacity 0.12s ease; }
+  .obj-item:hover .obj-del { opacity: 1; }
+  .obj-item .obj-del:hover { color: #ff6b6b; }
+  .obj-item .obj-del svg { width: 14px; height: 14px; }
+  .obj-empty { font-family:'Geist Mono',monospace; font-size: 0.66rem; color: var(--muted-2); padding: 4px 2px; }
+
+  .np-notes { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .np-notes-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .np-tools { display: flex; gap: 4px; }
+  .np-tool { border: 1px solid var(--line-2); background: var(--surface); color: var(--muted); cursor: pointer; padding: 6px; border-radius: 7px; line-height: 0; transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease; }
+  .np-tool:hover { background: var(--hover); color: var(--fg); border-color: var(--muted); }
+  .np-tool:active { background: var(--accent); color: var(--accent-fg); }
+  .np-tool svg { width: 15px; height: 15px; }
+  .np-notes textarea {
+    flex: 1; width: 100%; resize: none; font-family:'Geist',sans-serif; font-size: 0.92rem; line-height: 1.55;
+    border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--surface); padding: 12px 13px; color: var(--fg);
+  }
+  .np-notes textarea:focus { outline: none; border-color: var(--muted); }
+  .np-saved { font-size: 0.54rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted-2); margin-top: 8px; }
+
   footer.foot { max-width: 1500px; margin: 50px auto 0; padding: 22px 28px 40px; border-top: 1px solid var(--line); font-family:'Geist Mono',monospace; font-size: 0.6rem; letter-spacing: 0.08em; color: var(--muted-2); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 
   @media (max-width: 920px) {
@@ -442,6 +519,46 @@
   </footer>
 </div>
 
+<!-- NOTES DOCK (edge tab + slide-in panel) -->
+<div id="notesDock" class="notes-dock">
+  <button id="notesTab" class="notes-tab" aria-label="Open scratchpad" aria-expanded="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h11l5 5v11a0 0 0 0 1 0 0H4z"/><path d="M14 4v5h5M8 13h7M8 17h5"/></svg>
+    <span class="nt-label">SCRATCHPAD</span>
+  </button>
+  <aside class="notes-panel" role="dialog" aria-label="Week notes">
+    <div class="np-head">
+      <div>
+        <div class="eyebrow mono">Scratchpad</div>
+        <div class="np-week" id="notesWeek">—</div>
+      </div>
+      <button id="notesClose" class="iconbtn ghostx" aria-label="Close notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+
+    <div class="np-section">
+      <label class="np-label mono">Objectives</label>
+      <div class="obj-add">
+        <input type="text" id="objInput" placeholder="Add an objective for the week…" maxlength="100" />
+        <button id="objAdd" class="btn sm solid" aria-label="Add objective"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <div id="objList" class="obj-list"></div>
+    </div>
+
+    <div class="np-section np-notes">
+      <div class="np-notes-head">
+        <label class="np-label mono">Notes</label>
+        <div class="np-tools">
+          <button class="np-tool" data-mark="• " title="Bullet point" aria-label="Bullet point"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="6" r="1.4" fill="currentColor"/><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="5" cy="18" r="1.4" fill="currentColor"/><path d="M10 6h10M10 12h10M10 18h10"/></svg></button>
+          <button class="np-tool" data-mark="– " title="Dash" aria-label="Dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h2M4 12h2M4 18h2M10 6h10M10 12h10M10 18h10"/></svg></button>
+          <button class="np-tool" data-mark="number" title="Numbered list" aria-label="Numbered list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 5l1.4-.6V8M3.6 16.2c0-.7.6-1.2 1.3-1.2s1.2.5 1.2 1.1c0 1.2-2.4 1.6-2.5 2.9H6.3"/></svg></button>
+          <button class="np-tool" data-mark="[ ] " title="Checkbox" aria-label="Checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="6" height="6" rx="1.4"/><rect x="3" y="14" width="6" height="6" rx="1.4"/><path d="M13 8h8M13 17h8"/></svg></button>
+        </div>
+      </div>
+      <textarea id="notesArea" placeholder="Meeting notes, reminders, things not to forget…&#10;&#10;Tip: tap • or – to start a list, then press Enter to keep it going."></textarea>
+      <div class="np-saved mono" id="notesSaved">Saved automatically</div>
+    </div>
+  </aside>
+</div>
+
 <!-- MODAL -->
 <div class="scrim" id="scrim">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
@@ -513,7 +630,7 @@
     scene.add(points);
 
     var count = 0;
-    var WAVE_SPEED = 0.085; // per frame — calm but lively (original was 0.1)
+    var WAVE_SPEED = 0.022; // per frame — drastically slower, gentle drift (was 0.085)
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var animationId;
 
@@ -584,7 +701,7 @@
   var pickedColor = COLORS[2];
 
   // bucket for a given week (creates it on demand); curEvents() = the visible week's events
-  function weekBucket(iso){ iso = iso || state.weekStart; if(!state.weeks[iso]) state.weeks[iso]={events:{}}; return state.weeks[iso]; }
+  function weekBucket(iso){ iso = iso || state.weekStart; var w=state.weeks[iso]; if(!w){ w=state.weeks[iso]={events:{},notes:'',objectives:[]}; } if(w.notes===undefined)w.notes=''; if(!w.objectives)w.objectives=[]; return w; }
   function curEvents(){ return weekBucket(state.weekStart).events; }
 
   /* ---------- helpers ---------- */
@@ -630,7 +747,7 @@
   var calBody = $('calBody');
 
   /* ---------- render ---------- */
-  function render(){ renderHeaderBits(); renderGrid(); renderGamify(); renderReminder();
+  function render(){ renderHeaderBits(); renderGrid(); renderGamify(); renderReminder(); renderNotes();
     $('footStamp').textContent='LAST OPENED · '+new Date().toLocaleString('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit'}).toUpperCase(); }
 
   function renderHeaderBits(){
@@ -1028,6 +1145,108 @@
     save(); render(); renderWeeksPanel(); toast('Week deleted');
   }
 
+  /* ---------- week notes & objectives ---------- */
+  var notesSaveTimer=null;
+  function renderNotes(){
+    var w=weekBucket(state.weekStart);
+    var wk=$('notesWeek'); if(wk) wk.textContent=weekRangeLabel(state.weekStart);
+    var area=$('notesArea');
+    if(area && document.activeElement!==area) area.value = w.notes || '';
+    renderObjectives(w);
+  }
+  function renderObjectives(w){
+    var list=$('objList'); if(!list) return;
+    list.innerHTML='';
+    if(!w.objectives.length){ list.innerHTML='<div class="obj-empty">No objectives yet — set a few for the week.</div>'; return; }
+    w.objectives.forEach(function(o){
+      var row=document.createElement('div'); row.className='obj-item'+(o.done?' done':'');
+      row.innerHTML='<div class="obj-box">'+(o.done?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':'')+'</div>'+
+        '<div class="obj-text"></div>'+
+        '<button class="obj-del" aria-label="Delete objective"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+      row.querySelector('.obj-text').textContent=o.text;
+      row.querySelector('.obj-box').addEventListener('click', function(){ toggleObjective(o.id); });
+      row.querySelector('.obj-del').addEventListener('click', function(){ deleteObjective(o.id); });
+      list.appendChild(row);
+    });
+  }
+  function addObjective(){
+    var inp=$('objInput'); var t=(inp.value||'').trim(); if(!t) return;
+    var w=weekBucket(state.weekStart);
+    w.objectives.push({ id:uid(), text:t, done:false, awarded:false });
+    inp.value=''; save(); renderObjectives(w); inp.focus();
+  }
+  function toggleObjective(id){
+    var w=weekBucket(state.weekStart);
+    var o=w.objectives.filter(function(x){return x.id===id;})[0]; if(!o) return;
+    o.done=!o.done;
+    if(o.done && !o.awarded){ o.awarded=true; addXp(5,'Objective done · +5 XP'); }
+    save(); renderObjectives(w);
+  }
+  function deleteObjective(id){
+    var w=weekBucket(state.weekStart);
+    w.objectives=w.objectives.filter(function(x){return x.id!==id;});
+    save(); renderObjectives(w);
+  }
+  function onNotesInput(){
+    var w=weekBucket(state.weekStart);
+    w.notes=$('notesArea').value;
+    var saved=$('notesSaved'); if(saved) saved.textContent='Saving…';
+    clearTimeout(notesSaveTimer);
+    notesSaveTimer=setTimeout(function(){ save(); if(saved) saved.textContent='Saved automatically'; }, 500);
+  }
+  // prefix each selected line (or the current line) with a list marker
+  function applyNotesMark(mark){
+    var ta=$('notesArea'); if(!ta) return;
+    var val=ta.value, start=ta.selectionStart, end=ta.selectionEnd;
+    var lineStart=val.lastIndexOf('\n', start-1)+1;
+    var lineEnd=val.indexOf('\n', end); if(lineEnd===-1) lineEnd=val.length;
+    var block=val.slice(lineStart, lineEnd);
+    var lines=block.split('\n');
+    var n=1, added=0;
+    var out=lines.map(function(line){
+      var stripped=line.replace(/^(\s*)([•\u2013\-]\s+|\d+\.\s+|\[\s?\]\s+)/, '$1'); // remove existing marker
+      var indentMatch=stripped.match(/^(\s*)/); var indent=indentMatch?indentMatch[1]:'';
+      var content=stripped.slice(indent.length);
+      var m = (mark==='number') ? (n+++'. ') : mark;
+      added+=m.length;
+      return indent + m + content;
+    });
+    var replaced=out.join('\n');
+    ta.value = val.slice(0,lineStart) + replaced + val.slice(lineEnd);
+    ta.focus();
+    ta.selectionStart = ta.selectionEnd = lineStart + replaced.length;
+    onNotesInput();
+  }
+  // pressing Enter inside a list continues it; Enter on an empty marker ends the list
+  function onNotesKeydown(e){
+    if(e.key!=='Enter') return;
+    var ta=e.target, val=ta.value, pos=ta.selectionStart;
+    if(ta.selectionStart!==ta.selectionEnd) return; // ignore when selecting
+    var lineStart=val.lastIndexOf('\n', pos-1)+1;
+    var line=val.slice(lineStart, pos);
+    var m=line.match(/^(\s*)(•\s+|\u2013\s+|-\s+|(\d+)\.\s+|\[\s?\]\s+)/);
+    if(!m) return;
+    var indent=m[1], marker=m[2], rest=line.slice(m[0].length);
+    e.preventDefault();
+    if(rest.trim()===''){ // empty item → end the list
+      var newVal=val.slice(0,lineStart)+val.slice(pos);
+      ta.value=newVal; ta.selectionStart=ta.selectionEnd=lineStart; onNotesInput(); return;
+    }
+    var nextMarker;
+    if(m[3]!==undefined){ nextMarker=(parseInt(m[3],10)+1)+'. '; }   // numbered → increment
+    else { nextMarker=marker.replace(/\s+$/,' '); }                  // bullet/dash/checkbox repeat
+    var insert='\n'+indent+nextMarker;
+    ta.value=val.slice(0,pos)+insert+val.slice(pos);
+    ta.selectionStart=ta.selectionEnd=pos+insert.length;
+    onNotesInput();
+  }
+  function toggleNotes(force){
+    var dock=$('notesDock'); var open = (force===undefined) ? !dock.classList.contains('open') : force;
+    dock.classList.toggle('open', open);
+    $('notesTab').setAttribute('aria-expanded', open?'true':'false');
+    if(open){ renderNotes(); }
+  }
+
   /* ---------- export / import (backup) ---------- */
   function exportData(){
     try {
@@ -1084,6 +1303,15 @@
     $('prevWeek').addEventListener('click',function(){ stepWeek(-1); });
     $('nextWeek').addEventListener('click',function(){ stepWeek(1); });
     $('weeksBtn').addEventListener('click',function(e){ e.stopPropagation(); toggleWeeksPanel(); });
+    $('notesTab').addEventListener('click',function(){ toggleNotes(); });
+    $('notesClose').addEventListener('click',function(){ toggleNotes(false); });
+    $('objAdd').addEventListener('click',addObjective);
+    $('objInput').addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); addObjective(); } });
+    $('notesArea').addEventListener('input',onNotesInput);
+    $('notesArea').addEventListener('keydown',onNotesKeydown);
+    Array.prototype.forEach.call(document.querySelectorAll('.np-tool'), function(btn){
+      btn.addEventListener('click', function(){ applyNotesMark(btn.dataset.mark); });
+    });
     document.addEventListener('click',function(e){
       if(!$('weeksPanel').hidden && !e.target.closest('.weeks-wrap')) closeWeeksPanel();
     });
@@ -1098,6 +1326,7 @@
     $('scrim').addEventListener('click',function(e){ if(e.target===$('scrim'))closeModal(); });
     document.addEventListener('keydown',function(e){
       if(e.key==='Escape'&&$('scrim').classList.contains('open'))closeModal();
+      else if(e.key==='Escape'&&$('notesDock').classList.contains('open'))toggleNotes(false);
       if(e.key==='Enter'&&$('scrim').classList.contains('open')&&document.activeElement!==$('fNotes'))saveEvent();
     });
   }
