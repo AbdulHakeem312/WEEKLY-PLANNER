@@ -198,6 +198,36 @@
   }
   .range input[type="date"]:focus { outline: none; border-color: var(--muted); }
   input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.6; cursor: pointer; }
+  .hidden-date { width: 0; height: 0; padding: 0; border: 0; opacity: 0; position: absolute; pointer-events: none; }
+
+  /* week navigator */
+  .btn.icon { padding: 8px; }
+  .btn.icon svg { width: 16px; height: 16px; }
+  .weeknav { display: flex; align-items: center; gap: 6px; }
+  .weeklabel { display: flex; flex-direction: column; align-items: center; min-width: 168px; line-height: 1.15; }
+  .wl-range { font-size: 0.8rem; color: var(--fg); font-weight: 500; }
+  .wl-tag { font-size: 0.54rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted-2); margin-top: 2px; }
+  .wl-tag.now { color: var(--fg); }
+
+  /* saved-weeks archive */
+  .weeks-wrap { position: relative; }
+  .wcount { opacity: 0.6; font-size: 0.72rem; }
+  .weeks-panel {
+    position: absolute; top: calc(100% + 8px); left: 0; z-index: 50; width: 320px; max-height: 360px; overflow-y: auto;
+    background: var(--popover); border: 1px solid var(--line-2); border-radius: var(--radius);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.55); padding: 8px;
+  }
+  .weeks-panel .wp-empty { padding: 18px 12px; text-align: center; color: var(--muted-2); font-family:'Geist Mono',monospace; font-size: 0.72rem; }
+  .wrow { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; cursor: pointer; transition: background 0.12s ease; }
+  .wrow:hover { background: var(--hover); }
+  .wrow.current { background: var(--accent); color: var(--accent-fg); }
+  .wrow .wr-main { flex: 1; min-width: 0; }
+  .wrow .wr-range { font-size: 0.82rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wrow .wr-sub { font-family:'Geist Mono',monospace; font-size: 0.56rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; margin-top: 2px; }
+  .wrow .wr-del { border: none; background: transparent; color: inherit; opacity: 0.5; cursor: pointer; padding: 5px; border-radius: 6px; line-height: 0; }
+  .wrow .wr-del:hover { opacity: 1; background: rgba(231,0,11,0.16); color: #ff6b6b; }
+  .wrow.current .wr-del:hover { background: rgba(0,0,0,0.12); color: #b00; }
+  .wrow .wr-del svg { width: 15px; height: 15px; }
 
   .actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .progress-mini { display: flex; align-items: center; gap: 12px; }
@@ -372,11 +402,23 @@
   <!-- TOOLBAR -->
   <div class="toolbar">
     <div class="range">
-      <div class="field"><label class="mono">Week from</label><input type="date" id="fromDate" /></div>
-      <div class="field"><label class="mono">to</label><input type="date" id="toDate" readonly /></div>
+      <div class="weeknav">
+        <button class="btn icon sm" id="prevWeek" title="Previous week" aria-label="Previous week"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <div class="weeklabel">
+          <span class="wl-range mono" id="weekRange">—</span>
+          <span class="wl-tag mono" id="weekTag">—</span>
+        </div>
+        <button class="btn icon sm" id="nextWeek" title="Next week" aria-label="Next week"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18l6-6-6-6"/></svg></button>
+      </div>
       <button class="btn sm" id="thisWeekBtn" title="Jump to current week">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="1"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>This week
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="1"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Today
       </button>
+      <div class="weeks-wrap">
+        <button class="btn sm" id="weeksBtn" title="Browse saved weeks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Weeks <span class="wcount mono" id="weeksCount"></span></button>
+        <div class="weeks-panel" id="weeksPanel" hidden></div>
+      </div>
+      <input type="date" id="fromDate" class="hidden-date" aria-label="Jump to week containing date" />
+      <input type="date" id="toDate" readonly style="display:none" />
     </div>
     <div class="progress-mini" title="Tasks completed this week">
       <div class="track"><div class="fill" id="weekFill"></div></div>
@@ -384,10 +426,10 @@
     </div>
     <div class="actions">
       <button class="btn solid sm" id="addBtn2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>New block</button>
-      <button class="btn sm" id="exportBtn" title="Download a backup of your plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export</button>
+      <button class="btn sm" id="exportBtn" title="Download a backup of all weeks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export</button>
       <button class="btn sm" id="importBtn" title="Load a backup file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 9l5-5 5 5M12 4v12"/></svg>Import</button>
       <input type="file" id="importFile" accept="application/json,.json" style="display:none" />
-      <button class="btn danger sm" id="resetBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Reset week</button>
+      <button class="btn danger sm" id="resetBtn" title="Clear this week's blocks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Reset week</button>
     </div>
   </div>
 
@@ -533,10 +575,17 @@
     "Structure is freedom."
   ];
 
-  /* ---------- state ---------- */
-  var state = { weekStart:null, events:{}, streak:0, best:0, lastCheckin:null, xp:0, name:'' };
+  /* ---------- state ----------
+     Each week (keyed by its Monday ISO date) keeps its own planner in state.weeks.
+     Old weeks are retained as a history until explicitly deleted.
+     Streak / XP / check-in stay global (they track the habit, not a single week). */
+  var state = { weekStart:null, weeks:{}, streak:0, best:0, lastCheckin:null, xp:0, name:'' };
   var editingId = null;
   var pickedColor = COLORS[2];
+
+  // bucket for a given week (creates it on demand); curEvents() = the visible week's events
+  function weekBucket(iso){ iso = iso || state.weekStart; if(!state.weeks[iso]) state.weeks[iso]={events:{}}; return state.weeks[iso]; }
+  function curEvents(){ return weekBucket(state.weekStart).events; }
 
   /* ---------- helpers ---------- */
   function pad(n){ return n<10?'0'+n:''+n; }
@@ -589,7 +638,36 @@
     var to=fromISO(state.weekStart); to.setDate(to.getDate()+6); $('toDate').value=todayISO(to);
     var hr=new Date().getHours(); var part=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
     $('greeting').textContent = state.name ? (part+', '+state.name+'.') : (part+'.');
+    // week navigator label
+    $('weekRange').textContent = weekRangeLabel(state.weekStart);
+    var tag=weekTag(state.weekStart);
+    var tagEl=$('weekTag'); tagEl.textContent=tag; tagEl.classList.toggle('now', tag==='This week');
+    var wc=weeksWithData().length;
+    $('weeksCount').textContent = wc ? ('· '+wc) : '';
   }
+  function renderWeeksPanel(){
+    var panel=$('weeksPanel'); if(!panel) return;
+    var weeks=weeksWithData();
+    if(!weeks.length){ panel.innerHTML='<div class="wp-empty">No saved weeks yet.<br>Add blocks and they\'ll appear here.</div>'; return; }
+    // newest first
+    weeks.sort().reverse();
+    panel.innerHTML='';
+    weeks.forEach(function(iso){
+      var evs=state.weeks[iso].events; var n=Object.keys(evs).length;
+      var done=0; for(var id in evs){ if(evs[id].done)done++; }
+      var row=document.createElement('div');
+      row.className='wrow'+(iso===state.weekStart?' current':'');
+      row.innerHTML='<div class="wr-main"><div class="wr-range">'+weekRangeLabel(iso)+'</div>'+
+        '<div class="wr-sub">'+weekTag(iso)+' · '+n+' block'+(n===1?'':'s')+' · '+done+' done</div></div>'+
+        '<button class="wr-del" title="Delete this week" aria-label="Delete this week"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>';
+      row.querySelector('.wr-main').addEventListener('click', function(){ changeWeek(iso); closeWeeksPanel(); });
+      row.querySelector('.wr-del').addEventListener('click', function(e){ e.stopPropagation(); deleteWeek(iso); });
+      panel.appendChild(row);
+    });
+  }
+  function openWeeksPanel(){ renderWeeksPanel(); $('weeksPanel').hidden=false; }
+  function closeWeeksPanel(){ var p=$('weeksPanel'); if(p) p.hidden=true; }
+  function toggleWeeksPanel(){ var p=$('weeksPanel'); if(p.hidden) openWeeksPanel(); else closeWeeksPanel(); }
   function isToday(d){ var dd=fromISO(state.weekStart); dd.setDate(dd.getDate()+d); return todayISO(dd)===todayISO(new Date()); }
   function nowSlot(){ var n=new Date(); return n.getHours()*2+(n.getMinutes()>=30?1:0); }
   function nowFloat(){ var n=new Date(); return n.getHours()*2 + n.getMinutes()/30; } // fractional slot
@@ -648,7 +726,7 @@
   }
 
   function eventsForDay(day){
-    var out=[]; for(var id in state.events){ var e=state.events[id]; if(e.day===day) out.push(e); }
+    var out=[]; var evs=curEvents(); for(var id in evs){ var e=evs[id]; if(e.day===day) out.push(e); }
     out.sort(function(a,b){ return a.slot-b.slot || b.dur-a.dur; }); // containers (bigger, earlier) first
     return out;
   }
@@ -793,7 +871,7 @@
       return;
     }
 
-    var ev=state.events[d.ev.id]; if(!ev){ render(); return; }
+    var ev=curEvents()[d.ev.id]; if(!ev){ render(); return; }
     var changed = (ev.day!==d.target.day || ev.slot!==d.target.slot || ev.dur!==d.target.dur);
     ev.day=d.target.day; ev.slot=d.target.slot; ev.dur=d.target.dur;
     if(changed){ save(); render(); toast(d.mode==='resize' ? ('Duration → '+durLabel(ev.dur)) : 'Block moved'); }
@@ -801,13 +879,13 @@
   }
   // create copies of an event on the given days (skips exact duplicates)
   function addCopies(src, days){
-    var made=0;
+    var made=0; var evs=curEvents();
     days.forEach(function(day){
       var dup=false;
-      for(var id in state.events){ var f=state.events[id]; if(f.day===day && f.slot===src.slot && f.dur===src.dur && f.title===src.title){ dup=true; break; } }
+      for(var id in evs){ var f=evs[id]; if(f.day===day && f.slot===src.slot && f.dur===src.dur && f.title===src.title){ dup=true; break; } }
       if(dup) return;
       var nid=uid();
-      state.events[nid]={ id:nid, title:src.title, day:day, slot:src.slot, dur:src.dur, loc:src.loc||'', notes:src.notes||'', color:src.color||COLORS[2], done:false };
+      evs[nid]={ id:nid, title:src.title, day:day, slot:src.slot, dur:src.dur, loc:src.loc||'', notes:src.notes||'', color:src.color||COLORS[2], done:false };
       made++;
     });
     if(made) addXp(3*made, null);
@@ -816,22 +894,22 @@
 
 
   function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
-  function eventsAt(day,slot){ var out=[]; for(var id in state.events){var e=state.events[id]; if(e.day===day&&e.slot===slot)out.push(e);} return out; }
-  function countByDay(){ var c=[0,0,0,0,0,0,0]; for(var id in state.events){c[state.events[id].day]++;} return c; }
+  function eventsAt(day,slot){ var out=[]; var evs=curEvents(); for(var id in evs){var e=evs[id]; if(e.day===day&&e.slot===slot)out.push(e);} return out; }
+  function countByDay(){ var c=[0,0,0,0,0,0,0]; var evs=curEvents(); for(var id in evs){c[evs[id].day]++;} return c; }
 
   /* ---------- gamification + at-a-glance ---------- */
   function renderGamify(){
     var lvl=levelFromXp(state.xp);
     $('sStreak').textContent=state.streak;
     $('sBest').textContent=state.best;
-    var n=Object.keys(state.events).length;
+    var evs=curEvents(); var n=Object.keys(evs).length;
     $('sBlocks').textContent=n;
     $('sLevel').textContent=lvl; $('sXp').textContent=state.xp;
     $('sStreakSub').textContent = state.streak>0 ? ('Keep showing up daily.') : 'Check in daily to build it.';
     $('sBlocksSub').textContent = n>0 ? ('Across all seven days.') : 'Nothing scheduled yet.';
 
     // hero strip mirrors Tandem's checklist row
-    var done=0; for(var id in state.events){ if(state.events[id].done)done++; }
+    var done=0; for(var id in evs){ if(evs[id].done)done++; }
     $('heroStrip').innerHTML =
       mk('Streak · '+state.streak+'d') + mk('Best · '+state.best+'d') + mk('Level '+lvl) + mk(done+'/'+n+' done');
 
@@ -860,7 +938,7 @@
     var di=dayIndexForToday(), msg;
     if (di===-1){ msg='This isn\'t the current week — hit “This week” to see today and keep your chain going.'; }
     else {
-      var todays=[]; for(var id in state.events){ if(state.events[id].day===di)todays.push(state.events[id]); }
+      var todays=[]; var evs=curEvents(); for(var id in evs){ if(evs[id].day===di)todays.push(evs[id]); }
       var remaining=todays.filter(function(e){return !e.done;}).length;
       if (state.lastCheckin!==today) msg='You haven\'t checked in today — keep your '+(state.streak||0)+'-day chain alive before it resets.';
       else if (todays.length===0) msg='Nothing scheduled today. Add a block so tomorrow runs itself.';
@@ -913,19 +991,42 @@
     var loc=$('fLoc').value.trim(),notes=$('fNotes').value.trim();
     if(!title){ $('fTitle').focus(); toast('Give the block a name first'); return; }
     if(slot+dur>SLOTS)dur=SLOTS-slot;
-    if(editingId&&state.events[editingId]){ var e=state.events[editingId]; e.title=title;e.day=day;e.slot=slot;e.dur=dur;e.loc=loc;e.notes=notes;e.color=pickedColor; toast('Block updated'); }
-    else { var id=uid(); state.events[id]={id:id,title:title,day:day,slot:slot,dur:dur,loc:loc,notes:notes,color:pickedColor,done:false}; addXp(5,'Block added · +5 XP'); }
+    var evs=curEvents();
+    if(editingId&&evs[editingId]){ var e=evs[editingId]; e.title=title;e.day=day;e.slot=slot;e.dur=dur;e.loc=loc;e.notes=notes;e.color=pickedColor; toast('Block updated'); }
+    else { var id=uid(); evs[id]={id:id,title:title,day:day,slot:slot,dur:dur,loc:loc,notes:notes,color:pickedColor,done:false}; addXp(5,'Block added · +5 XP'); }
     closeModal(); save(); render();
   }
-  function deleteEvent(){ if(editingId&&state.events[editingId]){delete state.events[editingId];toast('Block removed');} closeModal(); save(); render(); }
-  function toggleDone(id){ var e=state.events[id]; if(!e)return; e.done=!e.done; if(e.done)addXp(15,'Done: '+e.title+' · +15 XP'); save(); render(); }
+  function deleteEvent(){ var evs=curEvents(); if(editingId&&evs[editingId]){delete evs[editingId];toast('Block removed');} closeModal(); save(); render(); }
+  function toggleDone(id){ var e=curEvents()[id]; if(!e)return; e.done=!e.done; if(e.done)addXp(15,'Done: '+e.title+' · +15 XP'); save(); render(); }
   function resetWeek(){
-    var n=Object.keys(state.events).length; if(n===0){toast('Week is already clear');return;}
-    if(!window.confirm('Reset the week?\n\nThis clears all '+n+' block'+(n===1?'':'s')+' from the grid.\nYour streak, best run and XP are kept.'))return;
-    state.events={}; save(); render(); toast('Week reset — clean slate');
+    var evs=curEvents(); var n=Object.keys(evs).length; if(n===0){toast('Week is already clear');return;}
+    if(!window.confirm('Reset this week?\n\nThis clears all '+n+' block'+(n===1?'':'s')+' from the current week only.\nOther saved weeks, your streak and XP are kept.'))return;
+    weekBucket(state.weekStart).events={}; save(); render(); toast('Week reset — clean slate');
   }
   function gotoThisWeek(){ state.weekStart=todayISO(mondayOf(new Date())); save(); render(); }
   function changeWeek(iso){ state.weekStart=todayISO(mondayOf(fromISO(iso))); save(); render(); }
+  function stepWeek(delta){ var m=mondayOf(fromISO(state.weekStart)); m.setDate(m.getDate()+delta*7); state.weekStart=todayISO(m); save(); render(); }
+
+  /* ---------- saved-weeks history ---------- */
+  function thisMonday(){ return todayISO(mondayOf(new Date())); }
+  function weekTag(iso){ var c=thisMonday(); return iso===c ? 'This week' : (iso<c ? 'Past' : 'Upcoming'); }
+  function weekRangeLabel(iso){
+    var a=fromISO(iso), b=fromISO(iso); b.setDate(b.getDate()+6);
+    var sameMonth=a.getMonth()===b.getMonth();
+    var fmtA=a.toLocaleDateString('en-GB',{day:'numeric',month: sameMonth?undefined:'short'});
+    var fmtB=b.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    return fmtA+' – '+fmtB;
+  }
+  function weeksWithData(){
+    return Object.keys(state.weeks).filter(function(k){ return Object.keys(state.weeks[k].events||{}).length>0; }).sort();
+  }
+  function deleteWeek(iso){
+    var cnt=Object.keys((state.weeks[iso]&&state.weeks[iso].events)||{}).length;
+    if(!window.confirm('Delete the planner for '+weekRangeLabel(iso)+'?\n\nThis permanently removes its '+cnt+' block'+(cnt===1?'':'s')+'. This cannot be undone.'))return;
+    delete state.weeks[iso];
+    if(state.weekStart===iso) weekBucket(state.weekStart); // recreate empty so current view stays valid
+    save(); render(); renderWeeksPanel(); toast('Week deleted');
+  }
 
   /* ---------- export / import (backup) ---------- */
   function exportData(){
@@ -946,11 +1047,18 @@
     reader.onload = function(e){
       try {
         var obj = JSON.parse(e.target.result);
-        if (!obj || typeof obj!=='object' || !obj.events){ toast('That file isn\'t a planner backup'); return; }
-        if (!window.confirm('Import this backup?\n\nIt will replace your current plan with the contents of the file.')) return;
-        state = Object.assign({ weekStart:null, events:{}, streak:0, best:0, lastCheckin:null, xp:0, name:'' }, obj);
-        state.events = obj.events || {};
-        if (!state.weekStart) state.weekStart = todayISO(mondayOf(new Date()));
+        if (!obj || typeof obj!=='object' || (!obj.weeks && !obj.events)){ toast('That file isn\'t a planner backup'); return; }
+        if (!window.confirm('Import this backup?\n\nIt will replace ALL your saved weeks with the contents of the file.')) return;
+        var next = { weekStart:null, weeks:{}, streak:0, best:0, lastCheckin:null, xp:0, name:'' };
+        next = Object.assign(next, obj);
+        if (obj.weeks){ next.weeks = obj.weeks; }
+        else if (obj.events){ // old flat backup → migrate into its week bucket
+          var wk = obj.weekStart || todayISO(mondayOf(new Date()));
+          next.weeks = {}; next.weeks[wk] = { events: obj.events };
+          delete next.events;
+        }
+        if (!next.weekStart) next.weekStart = todayISO(mondayOf(new Date()));
+        state = next;
         save(); render(); toast('Backup imported');
       } catch(err){ toast('Couldn\'t read that file'); }
     };
@@ -973,6 +1081,12 @@
     $('importFile').addEventListener('change',function(e){ if(e.target.files&&e.target.files[0]){ importData(e.target.files[0]); e.target.value=''; } });
     $('thisWeekBtn').addEventListener('click',gotoThisWeek);
     $('navWeek').addEventListener('click',gotoThisWeek);
+    $('prevWeek').addEventListener('click',function(){ stepWeek(-1); });
+    $('nextWeek').addEventListener('click',function(){ stepWeek(1); });
+    $('weeksBtn').addEventListener('click',function(e){ e.stopPropagation(); toggleWeeksPanel(); });
+    document.addEventListener('click',function(e){
+      if(!$('weeksPanel').hidden && !e.target.closest('.weeks-wrap')) closeWeeksPanel();
+    });
     $('saveBtn').addEventListener('click',saveEvent);
     $('cancelBtn').addEventListener('click',closeModal);
     $('deleteBtn').addEventListener('click',deleteEvent);
@@ -992,12 +1106,24 @@
   async function init(){
     buildSelectors(); bind(); buildDottedSurface();
     var saved=await load();
-    if (saved&&saved.weekStart){ state=Object.assign(state,saved); state.events=saved.events||{}; }
+    if (saved&&saved.weekStart){
+      state=Object.assign(state,saved);
+      // migrate older single-pool data into the per-week structure
+      if (!state.weeks){ state.weeks={}; }
+      if (saved.events && Object.keys(saved.events).length){
+        var wk = saved.weekStart;
+        if (!state.weeks[wk]) state.weeks[wk]={events:{}};
+        // merge any legacy events into that week's bucket
+        for (var oid in saved.events){ state.weeks[wk].events[oid]=saved.events[oid]; }
+      }
+      delete state.events;
+    }
     else { state.weekStart=todayISO(mondayOf(new Date())); seedDemo(); await save(); }
     render();
   }
   function seedDemo(){
-    function add(title,day,slot,dur,loc,color){ var id=uid(); state.events[id]={id:id,title:title,day:day,slot:slot,dur:dur,loc:loc||'',notes:'',color:color||COLORS[2],done:false}; }
+    var evs=curEvents();
+    function add(title,day,slot,dur,loc,color){ var id=uid(); evs[id]={id:id,title:title,day:day,slot:slot,dur:dur,loc:loc||'',notes:'',color:color||COLORS[2],done:false}; }
     add('Morning workout', 0, 13, 2, 'Gym', '#454545');
     add('Deep work block', 0, 20, 12, 'Desk', '#2c2c2c');      /* Mon 10:00 AM → 4:00 PM (6h) */
     add('Quick call', 0, 24, 1, 'Phone', '#9a9a9a');           /* Mon 12:00 PM — nests inside Deep work */
